@@ -39,6 +39,8 @@ STEPS=3
 NO_TRANS=1
 TOGGLE=1
 TOGGLE_PEEK=1
+SHOW=1
+HIDE=1
 
 _IS_HIDDEN=1
 _DOES_PEEK=0
@@ -242,6 +244,12 @@ argparse() {
                 usage
                 exit 0
                 ;;
+			"--show")
+				SHOW=0
+				;;
+			"--hide")
+				HIDE=0
+				;;
             **)
                 printf "Didn't understand '$1'\n" 1>&2
                 printf "See --help for usage.\n"
@@ -260,9 +268,10 @@ argparse() {
     fi
 
     if [ $TOGGLE -ne 0 ] && [ $TOGGLE_PEEK -ne 0 ] && [ $SIGNAL -ne 0 ] \
-            && [ $_HAS_REGION -ne 0 ] && [ $HOVER -ne 0 ]; then
-        printf "At least one of --toggle, --signal, --hover or" 1>&2
-        printf " --region is required!\n" 1>&2
+            && [ $_HAS_REGION -ne 0 ] && [ $HOVER -ne 0 ] && [ $SHOW -ne 0 ] \
+			&& [ $HIDE -ne 0 ]; then
+        printf "At least one of --toggle, --signal, --hover" 1>&2
+        printf " --region, --show, or --hide is required!\n" 1>&2
         exit 1
     fi
 }
@@ -493,6 +502,19 @@ function hide_window() {
     fi
 }
 
+# Used to trap SIGUSR1 for a "show" event
+function show_window(){
+	if [ $_IS_HIDDEN -eq 1 ]; then
+		hide_window 0
+	fi
+}
+
+# Use to trap SIGUSR2 for a "hide" event
+function do_hide_window(){
+	if [ $_IS_HIDDEN -eq 0 ]; then
+		hide_window 1
+	fi
+}
 
 function toggle() {
     # Toggle the hidden state of the window
@@ -628,6 +650,14 @@ function main() {
         printf "Found window with id: $WIN_ID\n"
     fi
 
+	if [ $SHOW -eq 0 ]; then
+		send_signal SIGUSR2
+	fi
+
+	if [ $HIDE -eq 0 ]; then
+		send_signal SIGUSR1
+	fi
+
     if [ $TOGGLE -eq 0 ]; then
         send_signal SIGUSR1
         exit 0
@@ -664,7 +694,8 @@ function main() {
         _WAIT_PID=$!
     elif [ $SIGNAL -eq 0 ]; then
         printf "Waiting for SIGUSR1...\n"
-        trap toggle SIGUSR1
+		trap show_window SIGUSR1
+        trap do_hide_window SIGUSR2
         sleep infinity &
         _WAIT_PID=$!
     elif [ $HOVER -eq 0 ]; then
